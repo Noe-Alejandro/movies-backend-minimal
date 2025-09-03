@@ -1,0 +1,29 @@
+# Normaliza texto
+* text=auto
+
+# Código .NET -> LF
+*.cs      text eol=lf
+*.csproj  text eol=lf
+*.props   text eol=lf
+*.targets text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.editorconfig text eol=lf
+
+# Archivos Windows -> CRLF
+*.sln     text eol=crlf
+*.ps1     text eol=crlf
+*.cmd     text eol=crlf
+*.bat     text eol=crlf
+
+# Bash/Shell -> LF
+*.sh      text eol=lf
+
+# Binarios
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.dll binary
+*.pdb binary

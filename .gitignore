@@ -1,0 +1,36 @@
+# Visual Studio specific files
+.vs/
+*.suo
+*.user
+*.userprefs
+*.dbmdl
+*.log
+*.bak
+*.tmp
+*.obj
+*.pdb
+*.lib
+*.exe
+*.dll
+*.ncb
+*.aps
+*.bsc
+*.sbr
+*.res
+*.pch
+*.ipch
+
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Test results
+TestResults/
+
+# Other common ignored files
+*.zip
+*.rar

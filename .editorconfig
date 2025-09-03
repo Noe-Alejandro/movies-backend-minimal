@@ -1,0 +1,27 @@
+root = true
+
+[*.{cs,csproj}]
+end_of_line = lf
+charset = utf-8
+indent_style = space
+indent_size = 3
+insert_final_newline = true
+
+[*.sln]
+end_of_line = crlf
+
+[*.{ps1,cmd,bat}]
+end_of_line = crlf
+
+[*.sh]
+end_of_line = lf
+
+# Prefiere namespace de archivo (como en WebApi minimal)
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+# Exigir modificadores de acceso (te “empuja” a poner public)
+dotnet_style_require_accessibility_modifiers = always:warning
+
+# Orden/limpieza de usings
+dotnet_separate_import_directive_groups = true
+dotnet_sort_system_directives_first = true
