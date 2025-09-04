@@ -1,6 +1,7 @@
 using Movies.Application;
 using Movies.Infrastructure;
 using Movies.WebApi.Endpoints;
+using Movies.WebApi.Security;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,11 +11,12 @@ builder.Host.UseSerilog((ctx, cfg) => cfg.ReadFrom.Configuration(ctx.Configurati
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddAuthentication().AddJwtBearer();
-builder.Services.AddAuthorization(o => o.AddPolicy("Movies.Read", p => p.RequireAssertion(_ => true)));
+
+builder.Services.AddJwtAuth(builder.Configuration);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddControllers();
 
 var app = builder.Build();
 app.UseSerilogRequestLogging();
@@ -23,6 +25,6 @@ app.UseSwaggerUI();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapEndpointModules();
+app.MapControllers();
 
 await app.RunAsync();

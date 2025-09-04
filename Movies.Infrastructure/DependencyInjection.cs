@@ -16,6 +16,7 @@ namespace Movies.Infrastructure
 
          services.AddDbContext<AppDbContext>(o => o.UseSqlServer(cs));
          services.AddScoped<IMovieRepository, MovieRepository>();
+         services.AddScoped<IAuthRepository, AuthRepository>();
          return services;
       }
    }

@@ -9,8 +9,8 @@ namespace Movies.WebApi.Endpoints
       public void MapEndpoints(IEndpointRouteBuilder app)
       {
          var group = app.MapGroup("/api/v1/movies")
-                        .WithTags("Movies")
-                        .RequireAuthorization("Movies.Read");
+            .RequireAuthorization("AllowedDomain", "Movies.Read")
+            .WithTags("Movies");
 
          group.MapGet("/", async (
              [AsParameters] GetMoviesRequestDto request,
