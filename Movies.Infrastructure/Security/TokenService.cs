@@ -27,7 +27,7 @@ public class TokenService : ITokenService
     {
         var jwtSettings = _configuration.GetSection("Jwt");
 
-        var secret = Environment.GetEnvironmentVariable("JWT_KEY")
+        var secret = Environment.GetEnvironmentVariable("JWT_KEY_API_MOVIES")
                  ?? throw new MissingJwtKeyException();
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
 

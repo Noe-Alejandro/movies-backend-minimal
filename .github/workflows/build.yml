@@ -9,6 +9,8 @@ jobs:
   build:
     name: Build and analyze
     runs-on: windows-latest
+    env:
+        JWT_KEY_API_MOVIES: ${{ secrets.JWT_KEY_API_MOVIES }}
     steps:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
