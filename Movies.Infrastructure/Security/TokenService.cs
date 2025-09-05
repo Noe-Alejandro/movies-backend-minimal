@@ -2,6 +2,7 @@
 using Microsoft.IdentityModel.Tokens;
 using Movies.Application.Abstractions.Repository;
 using Movies.Application.Abstractions.Service;
+using Movies.Application.Exceptions;
 using Movies.Application.Features.Auth.Dtos;
 using Movies.Domain.Entities.Auth;
 using System.IdentityModel.Tokens.Jwt;
@@ -25,11 +26,14 @@ public class TokenService : ITokenService
     public AuthResultDto GenerateTokens(UserAuth user)
     {
         var jwtSettings = _configuration.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
+
+        var secret = Environment.GetEnvironmentVariable("JWT_KEY")
+                 ?? throw new MissingJwtKeyException();
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
 
         var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
             new Claim("displayName", user.DisplayName ?? string.Empty)
         };
