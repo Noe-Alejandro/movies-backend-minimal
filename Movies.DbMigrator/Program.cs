@@ -1,7 +1,9 @@
 using DbUp;
 using Microsoft.Extensions.Configuration;
 
-class Program
+namespace Movies.DbMigrator;
+
+public static class Program
 {
     static int Main(string[] args)
     {
