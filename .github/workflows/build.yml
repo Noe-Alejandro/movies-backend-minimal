@@ -10,7 +10,7 @@ jobs:
     name: Build and analyze
     runs-on: windows-latest
     env:
-        JWT_KEY_API_MOVIES: ${{ secrets.JWT_KEY_API_MOVIES }}
+      JWT_KEY_API_MOVIES: ${{ secrets.JWT_KEY_API_MOVIES }}
     steps:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -45,7 +45,12 @@ jobs:
         shell: powershell
         run: |
           # Inicia el análisis con SonarCloud y ruta al reporte OpenCover
-          .\.sonar\scanner\dotnet-sonarscanner begin /k:"Noe-Alejandro_movies-backend-minimal" /o:"noe-alejandro" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+          .\.sonar\scanner\dotnet-sonarscanner begin /k:"Noe-Alejandro_movies-backend-minimal" /o:"noe-alejandro" `
+          /d:sonar.host.url="https://sonarcloud.io" `
+          /d:sonar.token="$env:SONAR_TOKEN" `
+          /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
+          /d:sonar.exclusions="**/Entities/**,**/Dtos/**,**/Exceptions/**,**/Common/**,**/Database/**,**/Persistence/**,**/DependencyInjection.cs,**/Program.cs,**/Mappers/**" `
+          /d:sonar.coverage.exclusions="**/Entities/**,**/Dtos/**,**/Exceptions/**,**/Common/**,**/Database/**,**/Persistence/**,**/DependencyInjection.cs,**/Program.cs,**/Mappers/**"
           
           dotnet build --no-incremental
           
