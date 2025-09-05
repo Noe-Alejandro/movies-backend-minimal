@@ -1,92 +1,109 @@
 using Microsoft.EntityFrameworkCore;
-using Movies.Application.Abstractions;
-using Movies.Infrastructure.Auth.Entities;
+using Movies.Application.Abstractions.Repository;
+using Movies.Domain.Entities.Auth;
 using Movies.Infrastructure.Persistence;
+using System.Security.Cryptography;
+using System.Text;
 
-namespace Movies.Infrastructure.Repositories
+namespace Movies.Infrastructure.Repositories;
+
+public class AuthRepository : IAuthRepository
 {
-   public sealed class AuthRepository(AppDbContext db) : IAuthRepository
-   {
-      public async Task<(int userId, int providerId)> EnsureUserAndIdentityAsync(
-          string? issuer, string? subject, string? email, string? displayName, CancellationToken ct)
-      {
-         // 1) Provider
-         var provider = await db.IdentityProviders
-           .FirstOrDefaultAsync(p => p.IssuerUri == issuer, ct)
-           ?? db.IdentityProviders.Add(new IdentityProvider { Name = issuer ?? "Unknown", IssuerUri = issuer ?? "unknown" }).Entity;
+    private readonly AppDbContext _db;
 
-         // 2) User (por email si existe)
-         var user = !string.IsNullOrWhiteSpace(email)
-           ? await db.AuthUsers.FirstOrDefaultAsync(u => u.Email == email, ct)
-           : null;
+    public AuthRepository(AppDbContext db) => _db = db;
 
-         user ??= db.AuthUsers.Add(new AuthUser { Email = email, DisplayName = displayName, IsActive = true }).Entity;
+    public async Task<UserAuth?> GetUserByEmailAsync(string email, CancellationToken ct)
+    {
+        return await _db.Users
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .Include(u => u.UserPermissions).ThenInclude(up => up.Permission)
+            .FirstOrDefaultAsync(u => u.Email == email, ct);
+    }
 
-         await db.SaveChangesAsync(ct);
+    public async Task<UserAuth?> GetUserByIdAsync(int id, CancellationToken ct)
+    {
+        return await _db.Users
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .Include(u => u.UserPermissions).ThenInclude(up => up.Permission)
+            .FirstOrDefaultAsync(u => u.Id == id, ct);
+    }
 
-         // 3) UserIdentity (iss+sub)
-         var identity = await db.UserIdentities
-           .FirstOrDefaultAsync(i => i.ProviderId == provider.Id && i.Subject == (subject ?? ""), ct);
+    public async Task AddUserAsync(UserAuth user, CancellationToken ct)
+    {
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(ct);
+    }
 
-         if (identity is null)
-         {
-            identity = new UserIdentity { UserId = user.Id, ProviderId = provider.Id, Subject = subject ?? "", EmailAtAuth = email };
-            db.UserIdentities.Add(identity);
-            await db.SaveChangesAsync(ct);
-         }
+    public async Task SaveSessionAsync(int userId, string refreshToken, DateTime expiresAt, CancellationToken ct)
+    {
+        var refreshTokenHash = HashToken(refreshToken);
 
-         return (user.Id, provider.Id);
-      }
-
-      public async Task TouchLoginAsync(int userId, int providerId, string? ip, string? userAgent, string result, CancellationToken ct)
-      {
-         var user = await db.AuthUsers.FindAsync([userId], ct);
-         if (user != null) user.LastLoginAt = DateTime.UtcNow;
-
-         db.AuditLogins.Add(new AuditLogin
-         {
+        var session = new UserSession
+        {
             UserId = userId,
-            ProviderId = providerId,
-            OccurredAt = DateTime.UtcNow,
-            Ip = ip,
-            UserAgent = userAgent,
-            Result = result
-         });
+            RefreshTokenHash = refreshTokenHash,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = expiresAt
+        };
 
-         await db.SaveChangesAsync(ct);
-      }
+        _db.UserSessions.Add(session);
+        await _db.SaveChangesAsync(ct);
+    }
 
-      public async Task<bool> IsEmailDomainAllowedAsync(string? email, CancellationToken ct)
-      {
-         if (string.IsNullOrWhiteSpace(email)) return false;
-         var at = email.IndexOf('@');
-         if (at < 0) return false;
-         var domain = email[(at + 1)..].ToLowerInvariant();
+    public async Task<UserSession?> GetSessionByTokenAsync(string refreshToken, CancellationToken ct)
+    {
+        var hash = HashToken(refreshToken);
+        return await _db.UserSessions
+            .FirstOrDefaultAsync(s => s.RefreshTokenHash == hash, ct);
+    }
 
-         return await db.AllowedEmailDomains.AnyAsync(d => d.IsActive && d.Domain == domain, ct);
-      }
+    public async Task RevokeSessionAsync(string refreshToken, bool allSessions, CancellationToken ct)
+    {
+        var hash = HashToken(refreshToken);
+        var session = await _db.UserSessions.FirstOrDefaultAsync(s => s.RefreshTokenHash == hash, ct);
 
-      public async Task<IReadOnlyList<string>> GetEffectivePermissionsAsync(int userId, CancellationToken ct)
-      {
-         // Role permissions UNION (user grants) EXCEPT (user denies)
-         var rolePerms = from ur in db.UserRoles
-                         where ur.UserId == userId
-                         join rp in db.RolePermissions on ur.RoleId equals rp.RoleId
-                         join p in db.Permissions on rp.PermissionId equals p.Id
-                         select p.Key;
+        if (session == null) return;
 
-         var userGrants = from up in db.UserPermissions
-                          where up.UserId == userId && up.IsGranted
-                          join p in db.Permissions on up.PermissionId equals p.Id
-                          select p.Key;
+        if (allSessions)
+        {
+            var sessions = _db.UserSessions.Where(s => s.UserId == session.UserId);
+            foreach (var s in sessions) s.RevokedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            session.RevokedAt = DateTime.UtcNow;
+        }
 
-         var userDenies = from up in db.UserPermissions
-                          where up.UserId == userId && !up.IsGranted
-                          join p in db.Permissions on up.PermissionId equals p.Id
-                          select p.Key;
+        await _db.SaveChangesAsync(ct);
+    }
 
-         var list = await rolePerms.Union(userGrants).Except(userDenies).Distinct().ToListAsync(ct);
-         return list;
-      }
-   }
+    public async Task<IEnumerable<string>> GetEffectivePermissionsAsync(int userId, CancellationToken ct)
+    {
+        var rolePerms = await _db.UserRoles
+            .Where(ur => ur.UserId == userId)
+            .SelectMany(ur => ur.Role.RolePermissions.Select(rp => rp.Permission.Key))
+            .ToListAsync(ct);
+
+        var directPerms = await _db.UserPermissions
+            .Where(up => up.UserId == userId && up.IsGranted)
+            .Select(up => up.Permission.Key)
+            .ToListAsync(ct);
+
+        return rolePerms.Concat(directPerms).Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task<bool> IsDomainAllowedAsync(string domain, CancellationToken ct)
+    {
+        return await _db.AllowedEmailDomains
+            .AnyAsync(d => d.Domain == domain && d.IsActive, ct)
+            || await _db.AllowedEmailDomains
+            .AnyAsync(d => d.Domain == "*", ct);
+    }
+
+    private static byte[] HashToken(string token)
+    {
+        using var sha = SHA256.Create();
+        return sha.ComputeHash(Encoding.UTF8.GetBytes(token));
+    }
 }

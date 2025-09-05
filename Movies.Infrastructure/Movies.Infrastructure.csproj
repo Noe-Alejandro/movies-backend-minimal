@@ -21,4 +21,8 @@
     <ProjectReference Include="..\Movies.Domain\Movies.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Database\Versioning\" />
+  </ItemGroup>
+
 </Project>

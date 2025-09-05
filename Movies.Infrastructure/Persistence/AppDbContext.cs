@@ -1,147 +1,73 @@
 using Microsoft.EntityFrameworkCore;
 using Movies.Domain.Entities;
-using Movies.Infrastructure.Auth.Entities;
+using Movies.Domain.Entities.Auth;
 
-namespace Movies.Infrastructure.Persistence
+namespace Movies.Infrastructure.Persistence;
+
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-   public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
-   {
-      public DbSet<Movie> Movies => Set<Movie>();
+    public DbSet<Movie> Movies => Set<Movie>();
 
-      #region Auth Schema
-      public DbSet<AuthUser> AuthUsers => Set<AuthUser>();
-      public DbSet<IdentityProvider> IdentityProviders => Set<IdentityProvider>();
-      public DbSet<UserIdentity> UserIdentities => Set<UserIdentity>();
-      public DbSet<Role> Roles => Set<Role>();
-      public DbSet<Permission> Permissions => Set<Permission>();
-      public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
-      public DbSet<UserRole> UserRoles => Set<UserRole>();
-      public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
-      public DbSet<AllowedEmailDomain> AllowedEmailDomains => Set<AllowedEmailDomain>();
-      public DbSet<AuditLogin> AuditLogins => Set<AuditLogin>();
-      #endregion
+    #region Auth Schema
+    public DbSet<UserAuth> Users { get; set; } = default!;
+    public DbSet<UserSession> UserSessions { get; set; } = default!;
+    public DbSet<Role> Roles { get; set; } = default!;
+    public DbSet<Permission> Permissions { get; set; } = default!;
+    public DbSet<UserRole> UserRoles { get; set; } = default!;
+    public DbSet<UserPermission> UserPermissions { get; set; } = default!;
+    public DbSet<Tenant> Tenants { get; set; } = default!;
+    public DbSet<AllowedEmailDomain> AllowedEmailDomains { get; set; } = default!;
+    #endregion
 
-      protected override void OnModelCreating(ModelBuilder modelBuilder)
-      {
-         modelBuilder.Entity<Movie>(e =>
-         {
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Movie>(e =>
+        {
             e.ToTable("Movies");
             e.HasKey(x => x.Id);
 
             e.Property(x => x.Title)
-             .HasMaxLength(200)
-             .IsRequired();
+          .HasMaxLength(200)
+          .IsRequired();
 
             e.Property(x => x.Genres)
-             .HasMaxLength(2000);
+          .HasMaxLength(2000);
 
             e.Property(x => x.DurationMinutes)
-             .IsRequired();
+          .IsRequired();
 
             e.Property(x => x.Synopsis)
-             .HasColumnType("nvarchar(max)");
+          .HasColumnType("nvarchar(max)");
 
             e.HasIndex(x => x.Year)
-             .HasDatabaseName("IX_Movies_Year");
-         });
+          .HasDatabaseName("IX_Movies_Year");
+        });
 
-         // ===== auth schema =====
-         modelBuilder.Entity<AuthUser>(e =>
-         {
-            e.ToTable("Users", "auth");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Email).HasMaxLength(256);
-            e.Property(x => x.DisplayName).HasMaxLength(200);
-            e.Property(x => x.PasswordHash);
-            e.Property(x => x.IsActive).HasDefaultValue(true);
-            e.Property(x => x.EmailVerified).HasDefaultValue(false);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-            e.HasIndex(x => x.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
-         });
+        modelBuilder.Entity<UserAuth>().ToTable("UserAuth", "auth");
+        modelBuilder.Entity<UserSession>().ToTable("UserSessions", "auth");
 
-         modelBuilder.Entity<IdentityProvider>(e =>
-         {
-            e.ToTable("IdentityProviders", "auth");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
-            e.Property(x => x.IssuerUri).HasMaxLength(400).IsRequired();
-            e.HasIndex(x => x.IssuerUri).IsUnique();
-         });
+        modelBuilder.Entity<UserTenant>().ToTable("UserTenants", "auth")
+            .HasKey(ut => new { ut.UserId, ut.TenantId });
 
-         modelBuilder.Entity<UserIdentity>(e =>
-         {
-            e.ToTable("UserIdentities", "auth");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Subject).HasMaxLength(200).IsRequired();
-            e.Property(x => x.EmailAtAuth).HasMaxLength(256);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-            e.HasIndex(x => new { x.ProviderId, x.Subject }).IsUnique();
-            e.HasOne(x => x.User).WithMany(u => u.Identities).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Provider).WithMany(p => p.UserIdentities).HasForeignKey(x => x.ProviderId).OnDelete(DeleteBehavior.Cascade);
-         });
+        modelBuilder.Entity<UserRole>().ToTable("UserRoles", "auth")
+            .HasKey(ur => new { ur.UserId, ur.RoleId });
 
-         modelBuilder.Entity<Role>(e =>
-         {
-            e.ToTable("Roles", "auth");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
-            e.Property(x => x.Description).HasMaxLength(300);
-            e.Property(x => x.IsActive).HasDefaultValue(true);
-            e.HasIndex(x => x.Name).IsUnique();
-         });
+        modelBuilder.Entity<UserPermission>().ToTable("UserPermissions", "auth")
+            .HasKey(up => new { up.UserId, up.PermissionId });
 
-         modelBuilder.Entity<Permission>(e =>
-         {
-            e.ToTable("Permissions", "auth");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Key).HasMaxLength(150).IsRequired();
-            e.Property(x => x.Name).HasMaxLength(150).IsRequired();
-            e.Property(x => x.Description).HasMaxLength(300);
-            e.Property(x => x.GroupName).HasMaxLength(100);
-            e.HasIndex(x => x.Key).IsUnique();
-         });
+        modelBuilder.Entity<RolePermission>().ToTable("RolePermissions", "auth")
+            .HasKey(rp => new { rp.RoleId, rp.PermissionId });
 
-         modelBuilder.Entity<RolePermission>(e =>
-         {
-            e.ToTable("RolePermissions", "auth");
-            e.HasKey(x => new { x.RoleId, x.PermissionId });
-            e.HasOne(x => x.Role).WithMany(r => r.RolePermissions).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Permission).WithMany(p => p.RolePermissions).HasForeignKey(x => x.PermissionId).OnDelete(DeleteBehavior.Cascade);
-         });
+        modelBuilder.Entity<UserPermission>().ToTable("UserPermissions", "auth")
+            .HasKey(up => new { up.UserId, up.PermissionId });
 
-         modelBuilder.Entity<UserRole>(e =>
-         {
-            e.ToTable("UserRoles", "auth");
-            e.HasKey(x => new { x.UserId, x.RoleId });
-            e.HasOne(x => x.User).WithMany(u => u.UserRoles).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Role).WithMany(r => r.UserRoles).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
-         });
+        modelBuilder.Entity<Role>().ToTable("Roles", "auth");
+        modelBuilder.Entity<Permission>().ToTable("Permissions", "auth");
+        modelBuilder.Entity<Tenant>().ToTable("Tenants", "dbo");
 
-         modelBuilder.Entity<UserPermission>(e =>
-         {
-            e.ToTable("UserPermissions", "auth");
-            e.HasKey(x => new { x.UserId, x.PermissionId });
-            e.Property(x => x.IsGranted).IsRequired();
-            e.HasOne(x => x.User).WithMany(u => u.UserPermissions).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Permission).WithMany(p => p.UserPermissions).HasForeignKey(x => x.PermissionId).OnDelete(DeleteBehavior.Cascade);
-         });
-
-         modelBuilder.Entity<AllowedEmailDomain>(e =>
-         {
-            e.ToTable("AllowedEmailDomains", "auth");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Domain).HasMaxLength(200).IsRequired();
-            e.Property(x => x.IsActive).HasDefaultValue(true);
-            e.HasIndex(x => x.Domain).IsUnique();
-         });
-
-         modelBuilder.Entity<AuditLogin>(e =>
-         {
-            e.ToTable("AuditLogins", "auth");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.OccurredAt).HasDefaultValueSql("SYSUTCDATETIME()");
-            e.Property(x => x.Result).HasMaxLength(50).IsRequired();
-         });
-      }
-   }
+        modelBuilder.Entity<AllowedEmailDomain>().ToTable("AllowedEmailDomains", "auth");
+        modelBuilder.Entity<AllowedEmailDomain>()
+            .HasIndex(d => new { d.TenantId, d.Domain })
+            .IsUnique();
+    }
 }
